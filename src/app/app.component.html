@@ -1,0 +1,1253 @@
+<div class="app-shell">
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar" [class.open]="mobileMenuOpen">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div>
+        <strong>MARFO BIOMETRICS</strong>
+        <span>Student Attendance Suite</span>
+      </div>
+    </div>
+
+    <div class="workspace-label">Navigation</div>
+
+    <nav>
+      @for (item of menu; track item.id) {
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeView === item.id"
+          (click)="setView(item.id)"
+        >
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span class="nav-label">{{ item.label }}</span>
+          @if (item.badge) {
+            <span class="nav-badge">{{ item.badge }}</span>
+          }
+        </button>
+      }
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="device-mini-card" [class.connected]="isDeviceConnected">
+        <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
+        <div class="device-info">
+          <strong>MARFO MSO 1300 E3</strong>
+          <small>{{ isDeviceConnected ? 'Connected · Ready' : 'Disconnected · Offline' }}</small>
+        </div>
+        <button
+          type="button"
+          class="device-toggle-btn"
+          [title]="isDeviceConnected ? 'Disconnect' : 'Connect'"
+          (click)="toggleDeviceConnection()"
+        >
+          {{ isDeviceConnected ? '✕' : '🔌' }}
+        </button>
+      </div>
+
+      <div class="user-chip">
+        <div class="avatar">AD</div>
+        <div>
+          <strong>Attendance Admin</strong>
+          <small>Campus Desk</small>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <!-- Top Header Bar -->
+    <header class="topbar">
+      <button type="button" class="menu-toggle" (click)="mobileMenuOpen = !mobileMenuOpen" aria-label="Toggle menu">
+        ☰
+      </button>
+
+      <div class="breadcrumbs">
+        <span>Workspace</span>
+        <b>/</b>
+        <strong>{{ activeMenuTitle }}</strong>
+      </div>
+
+      <div class="top-actions">
+        <!-- Live Clock -->
+        <div class="live-clock">
+          <span class="clock-icon">🕒</span>
+          <span class="clock-time">{{ currentTimeString }}</span>
+          <span class="clock-date">{{ currentDateString }}</span>
+        </div>
+
+        <!-- Sound Toggle with live feedback -->
+        <button
+          type="button"
+          class="sound-btn"
+          [class.muted]="audioService.muted"
+          (click)="toggleSound()"
+          title="Toggle Biometric Sound Effects"
+        >
+          <span>{{ audioService.muted ? '🔇 Sound Off' : '🔊 Sound On' }}</span>
+        </button>
+
+        <!-- Device Status Pill -->
+        <div
+          class="device-pill"
+          [class.pill-connected]="isDeviceConnected"
+          [class.pill-disconnected]="!isDeviceConnected"
+          (click)="toggleDeviceConnection()"
+          [title]="isDeviceConnected ? 'Click to Disconnect MARFO' : 'Click to Connect MARFO Device (Plays Sound)'"
+        >
+          <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
+          <span>{{ isDeviceConnected ? 'MARFO Connected' : 'No MARFO Connected' }}</span>
+          <b class="pill-action">{{ isDeviceConnected ? 'Disconnect' : 'Connect' }}</b>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content Wrapper -->
+    <div class="page-wrap">
+      <!-- Top Page Heading -->
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">
+            <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
+            Biometric Attendance System · 100% LocalStorage Persistence
+          </p>
+          <h1>{{ activeMenuTitle }}</h1>
+          <p class="subheading">
+            Zero dummy data default. User-entered student records, live fingerprint check-in/out, and real-time biometric audio feedback.
+          </p>
+        </div>
+
+        <div class="heading-actions">
+          <button
+            type="button"
+            class="kiosk-action-btn"
+            [class.active]="activeView === 'kiosk'"
+            (click)="setView('kiosk')"
+          >
+            🖐️ Open Kiosk
+          </button>
+          <button
+            type="button"
+            class="real-device-scan-btn"
+            (click)="scanRealMorphoDevice()"
+            title="Scan localhost ports 11100-11105 for physical Morpho RD Service"
+          >
+            🔍 Scan Real Morpho RD
+          </button>
+          <button
+            type="button"
+            class="outline-action-btn"
+            (click)="toggleDeviceConnection()"
+          >
+            {{ isDeviceConnected ? 'Disconnect MARFO' : '🔌 Connect MARFO' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= 1. DASHBOARD VIEW ================= -->
+      @if (activeView === 'dashboard') {
+        <!-- Quick Stats Grid -->
+        <section class="stat-grid">
+          <div class="stat-card" (click)="setView('students')">
+            <div class="stat-icon ink">👥</div>
+            <span>Registered Students</span>
+            <strong>{{ students.length }}</strong>
+            <small class="hint">{{ students.length === 0 ? 'No students yet — Click to add' : 'Saved in LocalStorage' }}</small>
+          </div>
+
+          <div class="stat-card" (click)="setView('enrollment')">
+            <div class="stat-icon teal">⌁</div>
+            <span>Enrolled Fingerprints</span>
+            <strong>{{ enrolledCount }}<small>/{{ students.length }}</small></strong>
+            <small class="hint">{{ enrolledCount === 0 ? 'Enroll fingerprints now' : 'Biometric templates linked' }}</small>
+          </div>
+
+          <div class="stat-card" (click)="setView('attendance')">
+            <div class="stat-icon green">✓</div>
+            <span>Present Today</span>
+            <strong>{{ presentTodayCount }}</strong>
+            <small class="positive">Punched in on or before cutoff</small>
+          </div>
+
+          <div class="stat-card" (click)="setView('attendance')">
+            <div class="stat-icon amber">⚠</div>
+            <span>Late / Absent Today</span>
+            <strong>{{ lateTodayCount }} <small>late</small> · {{ absentTodayCount }} <small>absent</small></strong>
+            <small class="warning">Needs attention</small>
+          </div>
+        </section>
+
+        <!-- Dashboard Visual Split -->
+        <section class="dashboard-grid">
+          <!-- Attendance Overview & Progress -->
+          <div class="panel activity-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Today's Attendance Snapshot</h2>
+                <p>Live check-in summary for {{ currentDateString }}</p>
+              </div>
+              <button type="button" class="text-link-btn" (click)="setView('attendance')">
+                Full Log <span>→</span>
+              </button>
+            </div>
+
+            @if (students.length === 0) {
+              <div class="empty-placeholder">
+                <div class="empty-icon">👥</div>
+                <h3>No Students Registered Yet</h3>
+                <p>Register your students first to start capturing biometric fingerprints and tracking daily attendance.</p>
+                <button type="button" class="primary-btn" (click)="setView('students')">
+                  + Register First Student
+                </button>
+              </div>
+            } @else {
+              <div class="overview">
+                <div class="ring">
+                  <div>
+                    <strong>{{ presentTodayCount + lateTodayCount }}</strong>
+                    <span>Checked In</span>
+                  </div>
+                </div>
+
+                <div class="legend">
+                  <div class="legend-row">
+                    <span class="legend-dot present"></span>
+                    <span>Present (On Time)</span>
+                    <strong>{{ presentTodayCount }}</strong>
+                  </div>
+                  <div class="legend-row">
+                    <span class="legend-dot late"></span>
+                    <span>Late Arrival</span>
+                    <strong>{{ lateTodayCount }}</strong>
+                  </div>
+                  <div class="legend-row">
+                    <span class="legend-dot half-day"></span>
+                    <span>Half-Day</span>
+                    <strong>{{ halfDayTodayCount }}</strong>
+                  </div>
+                  <div class="legend-row">
+                    <span class="legend-dot absent"></span>
+                    <span>Absent</span>
+                    <strong>{{ absentTodayCount }}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="progress-bar-wrap">
+                <div class="progress-track">
+                  <span
+                    class="progress-fill"
+                    [style.width.%]="students.length ? ((presentTodayCount + lateTodayCount) / students.length) * 100 : 0"
+                  ></span>
+                </div>
+                <div class="progress-labels">
+                  <span>Attendance Rate</span>
+                  <strong>{{ students.length ? (((presentTodayCount + lateTodayCount) / students.length) * 100 | number: '1.0-0') : 0 }}%</strong>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Device Status Panel -->
+          <div class="panel device-panel">
+            <div class="panel-head">
+              <div>
+                <h2>MARFO Device Status</h2>
+                <p>Optical Fingerprint Scanner MSO 1300</p>
+              </div>
+              <span
+                class="badge"
+                [class.badge-success]="isDeviceConnected"
+                [class.badge-danger]="!isDeviceConnected"
+              >
+                {{ isDeviceConnected ? '● Physical Hardware Online' : '● Offline' }}
+              </span>
+            </div>
+
+            <div class="device-card-content">
+              <div class="sensor-visual" [class.active]="isDeviceConnected">
+                <span class="sensor-icon">🖐️</span>
+                @if (isDeviceConnected) {
+                  <span class="sensor-pulse"></span>
+                }
+              </div>
+
+              <div class="device-meta">
+                <strong>{{ marfoService.deviceDetails.deviceModel }}</strong>
+                <p>Serial: {{ marfoService.deviceDetails.serialNumber }}</p>
+                <small>RD Service: 127.0.0.1:{{ marfoService.deviceDetails.rdPort || 11100 }}</small>
+                @if (isDeviceConnected) {
+                  <div class="real-hw-tag">✓ PHYSICAL MORPHO DETECTED</div>
+                }
+              </div>
+            </div>
+
+            <div class="device-actions">
+              <button
+                type="button"
+                class="real-hw-btn"
+                (click)="scanRealMorphoDevice()"
+              >
+                🔍 Detect Real Morpho RD Service
+              </button>
+
+              <button
+                type="button"
+                class="secondary-btn"
+                (click)="pairUsbDevice()"
+              >
+                🔌 Pair USB Device (WebUSB)
+              </button>
+
+              <button
+                type="button"
+                class="device-conn-btn"
+                [class.btn-connect]="!isDeviceConnected"
+                [class.btn-disconnect]="isDeviceConnected"
+                (click)="toggleDeviceConnection()"
+              >
+                {{ isDeviceConnected ? 'Disconnect MARFO Device' : '🔌 Connect MARFO (Plays Chime)' }}
+              </button>
+
+              <button type="button" class="secondary-btn" (click)="setView('kiosk')">
+                Open Kiosk Mode <span>→</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Recent Punches Table -->
+        <section class="panel table-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Today's Live Punch Log</h2>
+              <p>Real-time biometric check-in & check-out entries</p>
+            </div>
+            <button type="button" class="text-link-btn" (click)="setView('attendance')">
+              View All Records <span>→</span>
+            </button>
+          </div>
+
+          @if (todayRecords.length === 0) {
+            <div class="empty-table-msg">
+              <span>📋</span>
+              <p>No punches recorded today yet.</p>
+              <button type="button" class="small-btn" (click)="setView('kiosk')">Go to Attendance Kiosk</button>
+            </div>
+          } @else {
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Roll / Class</th>
+                    <th>Check-In</th>
+                    <th>Check-Out</th>
+                    <th>Working Hours</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of todayRecords; track row.id) {
+                    <tr>
+                      <td>
+                        <div class="student-cell">
+                          <span class="avatar">{{ (getStudentName(row.studentId) || 'ST').slice(0, 2).toUpperCase() }}</span>
+                          <div>
+                            <strong>{{ getStudentName(row.studentId) }}</strong>
+                            <small>{{ row.studentId }}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{{ getStudentDetails(row.studentId) || '—' }}</td>
+                      <td><span class="time-pill">{{ row.checkIn || '—' }}</span></td>
+                      <td><span class="time-pill">{{ row.checkOut || '—' }}</span></td>
+                      <td>{{ attendanceService.formatWorkingHours(row.workingMinutes) }}</td>
+                      <td>
+                        <span class="badge" [ngClass]="statusBadgeClass(row.status)">
+                          {{ row.status }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      }
+
+      <!-- ================= 2. ATTENDANCE KIOSK ================= -->
+      @else if (activeView === 'kiosk') {
+        <section class="kiosk-container">
+          <div class="kiosk-header-card">
+            <div class="kiosk-title">
+              <span class="kiosk-logo">🖐️</span>
+              <div>
+                <h2>STUDENT ATTENDANCE KIOSK</h2>
+                <p>Place enrolled finger on the MARFO sensor to record Check-In or Check-Out</p>
+              </div>
+            </div>
+
+            <div class="kiosk-clock-display">
+              <span class="big-time">{{ currentTimeString }}</span>
+              <span class="sub-date">{{ currentDateString }}</span>
+            </div>
+          </div>
+
+          <!-- Kiosk Main Interactive Area -->
+          <div class="kiosk-body-grid">
+            <!-- Left: Fingerprint Sensor Pad -->
+            <div class="kiosk-sensor-panel">
+              <!-- Warning Banner if Device Disconnected -->
+              @if (!isDeviceConnected) {
+                <div class="kiosk-alert-banner">
+                  <span class="alert-icon">⚠️</span>
+                  <div class="alert-text">
+                    <strong>No MARFO Device Connected</strong>
+                    <p>Fingerprint scanner is currently offline. Connect MARFO to proceed.</p>
+                  </div>
+                  <button type="button" class="alert-btn" (click)="toggleDeviceConnection()">
+                    Connect Device Now
+                  </button>
+                </div>
+              }
+
+              <!-- Biometric Sensor Disc -->
+              <div
+                class="sensor-touchpad"
+                [class.scanning]="kioskScanState === 'scanning' || kioskScanState === 'matching'"
+                [class.matched]="kioskScanState === 'matched'"
+                [class.error]="kioskScanState === 'not-matched'"
+                [class.disabled]="!isDeviceConnected"
+              >
+                <div class="fingerprint-glyph">
+                  ⌁
+                  @if (kioskScanState === 'scanning' || kioskScanState === 'matching') {
+                    <div class="laser-sweep"></div>
+                  }
+                </div>
+                <div class="sensor-caption">
+                  @if (!isDeviceConnected) {
+                    <span class="status-warn">Device Disconnected</span>
+                  } @else if (kioskScanState === 'scanning') {
+                    <span class="status-scan">Scanning Biometric Minutiae...</span>
+                  } @else if (kioskScanState === 'matching') {
+                    <span class="status-scan">Matching Biometric Hash...</span>
+                  } @else if (kioskScanState === 'matched') {
+                    <span class="status-success">Fingerprint Matched ✓</span>
+                  } @else if (kioskScanState === 'not-matched') {
+                    <span class="status-fail">Fingerprint Not Recognized ✕</span>
+                  } @else {
+                    <span>Place Your Finger Here</span>
+                  }
+                </div>
+              </div>
+
+              <!-- Physical Hardware Status Indicator -->
+              <div class="physical-device-status-badge" [class.connected]="isDeviceConnected">
+                <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
+                @if (isDeviceConnected) {
+                  <div>
+                    <strong>REAL MARFO DEVICE ACTIVE</strong>
+                    <small>{{ marfoService.deviceDetails.deviceModel }} (Port: {{ marfoService.deviceDetails.rdPort || 11100 }})</small>
+                  </div>
+                } @else {
+                  <div>
+                    <strong>NO PHYSICAL MARFO SCANNER DETECTED</strong>
+                    <small>Plug in USB scanner and ensure Morpho RD Service is running</small>
+                  </div>
+                }
+              </div>
+
+              <!-- Big Scan Button -->
+              <button
+                type="button"
+                class="big-kiosk-scan-btn"
+                [disabled]="isKioskBusy || !isDeviceConnected || enrolledStudents.length === 0"
+                (click)="scanKioskFingerprint()"
+              >
+                @if (isKioskBusy) {
+                  <span class="spinner"></span> Optical Sensor Active... Place Finger on Glass...
+                } @else if (!isDeviceConnected) {
+                  🔌 Connect / Detect Physical USB Device
+                } @else {
+                  🖐️ Scan Finger on Physical MARFO Device
+                }
+              </button>
+
+              <p class="kiosk-hint-msg">{{ kioskMessage }}</p>
+            </div>
+
+            <!-- Right: Student Verification Card & Action -->
+            <div class="kiosk-result-panel">
+              @if (kioskScanState === 'matched' && kioskStudent) {
+                <div class="verified-student-card">
+                  <div class="verified-header">
+                    <span class="verified-badge">✓ FINGERPRINT MATCHED</span>
+                    <span class="confidence-pill">{{ kioskConfidence }}% Match</span>
+                  </div>
+
+                  <div class="student-profile-summary">
+                    <div class="big-avatar">{{ kioskStudent.name.slice(0, 2).toUpperCase() }}</div>
+                    <div class="profile-details">
+                      <h3>{{ kioskStudent.name }}</h3>
+                      <p class="stu-id">Student ID: <strong>{{ kioskStudent.id }}</strong></p>
+                      <p class="stu-class">Class: {{ kioskStudent.className }} - Section {{ kioskStudent.section }} (Roll: {{ kioskStudent.rollNumber }})</p>
+                    </div>
+                  </div>
+
+                  <!-- Today's Attendance Status for this student -->
+                  <div class="student-today-status">
+                    <h4>Today's Attendance Status</h4>
+                    <div class="status-row">
+                      <span>Check-In:</span>
+                      <strong>{{ kioskAttendanceToday?.checkIn || 'Not Recorded' }}</strong>
+                    </div>
+                    <div class="status-row">
+                      <span>Check-Out:</span>
+                      <strong>{{ kioskAttendanceToday?.checkOut || 'Not Recorded' }}</strong>
+                    </div>
+                    @if (kioskAttendanceToday?.workingMinutes) {
+                      <div class="status-row">
+                        <span>Total Time:</span>
+                        <strong>{{ attendanceService.formatWorkingHours(kioskAttendanceToday?.workingMinutes) }}</strong>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Attendance Buttons -->
+                  <div class="kiosk-actions-row">
+                    <button
+                      type="button"
+                      class="checkin-btn"
+                      [disabled]="!canKioskCheckIn()"
+                      (click)="kioskCheckIn()"
+                    >
+                      ✓ Check In
+                    </button>
+
+                    <button
+                      type="button"
+                      class="checkout-btn"
+                      [disabled]="!canKioskCheckOut()"
+                      (click)="kioskCheckOut()"
+                    >
+                      ⏱ Check Out
+                    </button>
+                  </div>
+
+                  @if (!canKioskCheckIn() && !canKioskCheckOut()) {
+                    <p class="attendance-done-msg">
+                      ✓ Daily Attendance Completed for Today!
+                    </p>
+                  }
+                </div>
+              } @else if (kioskScanState === 'not-matched') {
+                <div class="unverified-card">
+                  <div class="fail-icon">✕</div>
+                  <h3>Fingerprint Not Recognized</h3>
+                  <p>The biometric pattern does not match any student currently enrolled in the system.</p>
+                  <div class="troubleshoot-box">
+                    <strong>Suggestions:</strong>
+                    <ul>
+                      <li>Ensure student is enrolled in Fingerprint Enrollment tab</li>
+                      <li>Wipe finger and place firmly on the scanner</li>
+                      <li>Check MARFO reader optical glass for dust</li>
+                    </ul>
+                  </div>
+                  <button type="button" class="secondary-btn" (click)="kioskScanState = 'waiting'">
+                    Try Again
+                  </button>
+                </div>
+              } @else {
+                <div class="idle-kiosk-prompt">
+                  <div class="idle-illustration">🔐</div>
+                  <h3>Ready for Biometric Punch</h3>
+                  <p>Students must place their registered finger on the MARFO sensor and click <strong>Verify Fingerprint</strong>.</p>
+                  <div class="kiosk-rules-badge">
+                    <span>Expected In: {{ attendanceService.config.expectedCheckIn }}</span>
+                    <span>Late After: {{ attendanceService.config.lateAfter }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- ================= 3. STUDENT DIRECTORY & REGISTRATION ================= -->
+      @else if (activeView === 'students') {
+        <section class="content-grid">
+          <!-- Left: Registration Form -->
+          <div class="panel form-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Register New Student</h2>
+                <p>Profile is saved A-to-Z directly in LocalStorage</p>
+              </div>
+            </div>
+
+            <form [formGroup]="studentForm" (ngSubmit)="saveStudent()" class="styled-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="stuId">Student ID *</label>
+                  <input
+                    id="stuId"
+                    type="text"
+                    formControlName="id"
+                    placeholder="e.g. STU001"
+                    autocomplete="off"
+                  />
+                  @if (studentForm.get('id')?.invalid && studentForm.get('id')?.touched) {
+                    <small class="form-err">Student ID is required (3-12 characters)</small>
+                  }
+                </div>
+
+                <div class="form-group">
+                  <label for="rollNo">Roll Number *</label>
+                  <input
+                    id="rollNo"
+                    type="text"
+                    formControlName="rollNumber"
+                    placeholder="e.g. 101"
+                  />
+                  @if (studentForm.get('rollNumber')?.invalid && studentForm.get('rollNumber')?.touched) {
+                    <small class="form-err">Roll Number is required</small>
+                  }
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="stuName">Student Full Name *</label>
+                <input
+                  id="stuName"
+                  type="text"
+                  formControlName="name"
+                  placeholder="e.g. Aarav Sharma"
+                />
+                @if (studentForm.get('name')?.invalid && studentForm.get('name')?.touched) {
+                  <small class="form-err">Student name is required</small>
+                }
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="stuClass">Class / Degree *</label>
+                  <input
+                    id="stuClass"
+                    type="text"
+                    formControlName="className"
+                    placeholder="e.g. BCA, MCA, B.Tech"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="stuSec">Section *</label>
+                  <select id="stuSec" formControlName="section">
+                    <option value="A">Section A</option>
+                    <option value="B">Section B</option>
+                    <option value="C">Section C</option>
+                    <option value="D">Section D</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="stuPhone">Phone Number</label>
+                  <input
+                    id="stuPhone"
+                    type="tel"
+                    formControlName="phone"
+                    placeholder="+91 98765 43210"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="stuEmail">Email Address</label>
+                  <input
+                    id="stuEmail"
+                    type="email"
+                    formControlName="email"
+                    placeholder="student@marfo.edu"
+                  />
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="primary-btn full">
+                  + Register Student & Save to LocalStorage
+                </button>
+              </div>
+            </form>
+
+            <div class="form-bottom-helpers">
+              <button type="button" class="danger-link-btn" (click)="clearAllData()">
+                🗑 Clear All LocalStorage Data
+              </button>
+            </div>
+          </div>
+
+          <!-- Right: Student Directory List -->
+          <div class="panel table-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Registered Student Directory</h2>
+                <p>{{ students.length }} total student profiles stored</p>
+              </div>
+              <span class="badge badge-success">{{ enrolledCount }} Biometric Enrolled</span>
+            </div>
+
+            @if (students.length === 0) {
+              <div class="empty-state-card">
+                <div class="empty-icon">📝</div>
+                <h3>No Students In LocalStorage</h3>
+                <p>Fill out the registration form on the left to add your first student. All records will be securely saved in your browser's LocalStorage.</p>
+              </div>
+            } @else {
+              <div class="directory-list">
+                @for (student of students; track student.id) {
+                  <div class="directory-item">
+                    <div class="avatar">{{ student.name.slice(0, 2).toUpperCase() }}</div>
+                    <div class="directory-info">
+                      <strong>{{ student.name }}</strong>
+                      <div class="sub-info">
+                        <span>ID: {{ student.id }}</span>
+                        <span>• Roll: {{ student.rollNumber }}</span>
+                        <span>• {{ student.className }} - Sec {{ student.section }}</span>
+                      </div>
+                      @if (student.phone || student.email) {
+                        <div class="contact-info">
+                          @if (student.phone) { <span>📞 {{ student.phone }}</span> }
+                          @if (student.email) { <span>✉ {{ student.email }}</span> }
+                        </div>
+                      }
+                    </div>
+
+                    <div class="directory-actions">
+                      <span
+                        class="badge"
+                        [class.badge-success]="student.fingerprintEnrolled"
+                        [class.badge-neutral]="!student.fingerprintEnrolled"
+                      >
+                        {{ student.fingerprintStatus }}
+                      </span>
+
+                      @if (!student.fingerprintEnrolled) {
+                        <button
+                          type="button"
+                          class="action-pill-btn"
+                          (click)="enrollmentStudentId = student.id; setView('enrollment')"
+                        >
+                          Enroll ⌁
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          class="action-pill-btn alt"
+                          (click)="setView('kiosk')"
+                        >
+                          Kiosk 🖐️
+                        </button>
+                      }
+
+                      <button
+                        type="button"
+                        class="delete-btn"
+                        (click)="deleteStudent(student, $event)"
+                        title="Delete Student from LocalStorage"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      <!-- ================= 4. FINGERPRINT ENROLLMENT ================= -->
+      @else if (activeView === 'enrollment') {
+        <section class="content-grid">
+          <!-- Left: Enrollment Controller -->
+          <div class="panel flow-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Biometric Enrollment</h2>
+                <p>Pair a physical MARFO fingerprint scan with a student</p>
+              </div>
+              <span class="badge" [class.badge-success]="isDeviceConnected" [class.badge-danger]="!isDeviceConnected">
+                {{ isDeviceConnected ? 'MARFO Ready' : 'MARFO Offline' }}
+              </span>
+            </div>
+
+            <!-- Student Picker -->
+            <div class="field-wrap">
+              <label for="enrollStuSelect">Select Student to Enroll:</label>
+              @if (students.length === 0) {
+                <div class="warning-callout">
+                  <span>⚠️ No students registered yet. Please register a student first.</span>
+                  <button type="button" class="small-btn" (click)="setView('students')">Register Student</button>
+                </div>
+              } @else {
+                <select id="enrollStuSelect" [(ngModel)]="enrollmentStudentId" [disabled]="isEnrolling">
+                  @for (stu of students; track stu.id) {
+                    <option [value]="stu.id">
+                      {{ stu.name }} (ID: {{ stu.id }} · {{ stu.className }}-{{ stu.section }})
+                      {{ stu.fingerprintEnrolled ? '✓ [Already Enrolled]' : '• [Needs Enrollment]' }}
+                    </option>
+                  }
+                </select>
+              }
+            </div>
+
+            <!-- Visual Scanner Animation -->
+            <div class="enroll-visual-box" [class.active]="isEnrolling">
+              <div class="fingerprint-large">⌁</div>
+              @if (isEnrolling) {
+                <div class="scanning-ring"></div>
+              }
+              <strong>{{ enrollmentStatusText }}</strong>
+              <small>Place index finger squarely on the MARFO sensor surface</small>
+            </div>
+
+            <!-- Enrollment Action Button -->
+            <div class="enroll-actions">
+              @if (!isDeviceConnected) {
+                <button type="button" class="primary-btn full" (click)="toggleDeviceConnection()">
+                  🔌 Connect MARFO Device First
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="primary-btn full"
+                  [disabled]="isEnrolling || students.length === 0"
+                  (click)="startEnrollmentWizard()"
+                >
+                  @if (isEnrolling) {
+                    <span class="spinner"></span> Enrolling Biometrics...
+                  } @else {
+                    Start Fingerprint Enrollment <span>→</span>
+                  }
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Right: Guided Steps Progress -->
+          <div class="panel steps-panel">
+            <h2>Enrollment Protocol</h2>
+            <p class="panel-intro">Standard ISO 19794-2 biometric enrollment procedure</p>
+
+            <div class="steps-flow">
+              <div class="step-item" [class.done]="enrollmentStep > 1" [class.active]="enrollmentStep === 1">
+                <span class="step-num">01</span>
+                <div>
+                  <strong>Select Student Profile</strong>
+                  <small>Verify student identity against registration records</small>
+                </div>
+                <span class="step-check">{{ enrollmentStep > 1 ? '✓' : '•' }}</span>
+              </div>
+
+              <div class="step-item" [class.done]="enrollmentStep > 2" [class.active]="enrollmentStep === 2">
+                <span class="step-num">02</span>
+                <div>
+                  <strong>Device Handshake</strong>
+                  <small>Check MARFO MSO 1300 optical sensor calibration</small>
+                </div>
+                <span class="step-check">{{ enrollmentStep > 2 ? '✓' : '•' }}</span>
+              </div>
+
+              <div class="step-item" [class.done]="enrollmentStep > 3" [class.active]="enrollmentStep === 3">
+                <span class="step-num">03</span>
+                <div>
+                  <strong>Optical Minutiae Capture</strong>
+                  <small>Capture 3 distinct biometric ridge impressions</small>
+                </div>
+                <span class="step-check">{{ enrollmentStep > 3 ? '✓' : '•' }}</span>
+              </div>
+
+              <div class="step-item" [class.done]="enrollmentStep === 4" [class.active]="enrollmentStep === 4">
+                <span class="step-num">04</span>
+                <div>
+                  <strong>LocalStorage Vault Binding</strong>
+                  <small>Biometric template hash bound to student profile</small>
+                </div>
+                <span class="step-check">{{ enrollmentStep === 4 ? '✓' : '•' }}</span>
+              </div>
+            </div>
+
+            <div class="security-box">
+              <span class="shield-icon">🛡️</span>
+              <div>
+                <strong>Secure Template Hash</strong>
+                <p>Only mathematical minutiae vectors are saved in LocalStorage. Raw fingerprint imagery is never exposed.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- ================= 5. SCANNER DIAGNOSTICS / VERIFICATION ================= -->
+      @else if (activeView === 'verification') {
+        <section class="content-grid">
+          <div class="panel verify-panel">
+            <div class="panel-head">
+              <div>
+                <h2>MARFO Optical Scanner Diagnostics</h2>
+                <p>Verify sensor reading, template extraction, and match scores</p>
+              </div>
+              <span class="badge" [class.badge-success]="isDeviceConnected" [class.badge-danger]="!isDeviceConnected">
+                {{ isDeviceConnected ? 'Hardware Online' : 'No Hardware' }}
+              </span>
+            </div>
+
+            <!-- Physical Sensor Instructions -->
+            <div class="physical-diag-banner">
+              <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
+              <span>
+                {{ isDeviceConnected ? 'Physical Morpho Scanner Active on Port ' + (marfoService.deviceDetails.rdPort || 11100) : 'Scanner Offline — Plug in USB device & check RD Service' }}
+              </span>
+            </div>
+
+            <!-- Diagnostic Screen Visual -->
+            <div
+              class="diag-screen"
+              [class.matched]="diagnosticState === 'matched'"
+              [class.failed]="diagnosticState === 'not-matched'"
+              [class.busy]="diagnosticBusy"
+            >
+              <div class="diag-icon">⌁</div>
+              <strong>
+                @if (diagnosticState === 'matched') {
+                  FINGERPRINT MATCH CONFIRMED ✓
+                } @else if (diagnosticState === 'not-matched') {
+                  VERIFICATION FAILED ✕
+                } @else {
+                  SENSOR READY FOR CALIBRATION
+                }
+              </strong>
+              <p>{{ diagnosticMessage }}</p>
+            </div>
+
+            <button
+              type="button"
+              class="primary-btn full"
+              [disabled]="diagnosticBusy || !isDeviceConnected"
+              (click)="runDiagnosticsTest()"
+            >
+              @if (diagnosticBusy) {
+                <span class="spinner"></span> Running Biometric Analysis...
+              } @else if (!isDeviceConnected) {
+                🔌 Connect MARFO to Run Diagnostics
+              } @else {
+                Run Verification Test <span>→</span>
+              }
+            </button>
+          </div>
+
+          <!-- Right: Technical Sensor Specs -->
+          <div class="panel specs-panel">
+            <h2>Sensor Hardware Specs</h2>
+            <div class="spec-list">
+              <div class="spec-row">
+                <span>Device Model:</span>
+                <strong>{{ marfoService.deviceDetails.deviceModel }}</strong>
+              </div>
+              <div class="spec-row">
+                <span>Optical Resolution:</span>
+                <strong>500 DPI (256 gray levels)</strong>
+              </div>
+              <div class="spec-row">
+                <span>Capture Area:</span>
+                <strong>14 x 22 mm</strong>
+              </div>
+              <div class="spec-row">
+                <span>Security Standard:</span>
+                <strong>FIPS 201 & PIV compliant</strong>
+              </div>
+              <div class="spec-row">
+                <span>RD Service Port:</span>
+                <strong>{{ marfoService.deviceDetails.rdPort || 11100 }}</strong>
+              </div>
+              <div class="spec-row">
+                <span>LocalStorage Templates:</span>
+                <strong>{{ enrolledCount }} stored</strong>
+              </div>
+            </div>
+
+            <div class="info-note">
+              <strong>Seamless Hardware Bridge</strong>
+              <p>When physical Morpho RD Service is running on localhost, Angular communicates via standard HTTP XML/JSON loopback without requiring browser plugins.</p>
+            </div>
+          </div>
+        </section>
+      }
+
+      <!-- ================= 6. DAILY ATTENDANCE ================= -->
+      @else if (activeView === 'attendance') {
+        <section class="panel full-panel">
+          <!-- Toolbar & Filters -->
+          <div class="attendance-toolbar">
+            <div class="search-input-wrap">
+              <span class="search-icon">🔍</span>
+              <input
+                type="text"
+                [(ngModel)]="attendanceSearch"
+                placeholder="Search by student name or ID..."
+              />
+            </div>
+
+            <div class="date-picker-wrap">
+              <label for="attDate">Date:</label>
+              <input
+                id="attDate"
+                type="date"
+                [(ngModel)]="attendanceDateFilter"
+              />
+            </div>
+
+            <div class="status-select-wrap">
+              <select [(ngModel)]="attendanceStatusFilter">
+                <option value="all">All Statuses</option>
+                <option value="present">Present Only</option>
+                <option value="late">Late Only</option>
+                <option value="half-day">Half-Day Only</option>
+                <option value="absent">Absent Only</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              class="config-btn"
+              (click)="showConfigDrawer = !showConfigDrawer"
+            >
+              ⚙ Attendance Rules
+            </button>
+
+            <button
+              type="button"
+              class="refresh-btn"
+              (click)="attendanceSearch = ''; attendanceStatusFilter = 'all'; attendanceDateFilter = attendanceService.getTodayKey()"
+            >
+              Reset Filters
+            </button>
+          </div>
+
+          <!-- Attendance Rules Drawer/Form -->
+          @if (showConfigDrawer) {
+            <div class="config-drawer-card">
+              <div class="drawer-header">
+                <h3>Configure Attendance Rules</h3>
+                <button type="button" class="close-x-btn" (click)="showConfigDrawer = false">✕</button>
+              </div>
+
+              <form [formGroup]="attendanceConfigForm" (ngSubmit)="saveAttendanceConfig()" class="config-form">
+                <div class="config-inputs-row">
+                  <div class="form-group">
+                    <label for="expIn">Expected Check-In Time</label>
+                    <input id="expIn" type="time" formControlName="expectedCheckIn" />
+                    <small>Default: 09:00</small>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="lateAft">Mark Late After</label>
+                    <input id="lateAft" type="time" formControlName="lateAfter" />
+                    <small>Default: 09:15</small>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="halfHrs">Half-Day Minimum Hours</label>
+                    <input id="halfHrs" type="number" formControlName="halfDayHours" min="1" max="12" />
+                    <small>Hours below this marked Half-Day</small>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="fullHrs">Full-Day Standard Hours</label>
+                    <input id="fullHrs" type="number" formControlName="fullDayHours" min="2" max="24" />
+                    <small>Target working hours (default 8)</small>
+                  </div>
+                </div>
+
+                <div class="config-actions">
+                  <button type="submit" class="primary-btn">Save Rules to LocalStorage</button>
+                  <button type="button" class="secondary-btn" (click)="showConfigDrawer = false">Cancel</button>
+                </div>
+              </form>
+            </div>
+          }
+
+          <!-- Attendance Table -->
+          <div class="panel-head">
+            <div>
+              <h2>Master Attendance Register</h2>
+              <p>Showing records for {{ attendanceDateFilter || 'All Dates' }}</p>
+            </div>
+            <div class="table-counts">
+              <span>Showing {{ filteredAttendance.length }} entries</span>
+            </div>
+          </div>
+
+          @if (filteredAttendance.length === 0) {
+            <div class="empty-table-msg">
+              <span>📅</span>
+              <p>No attendance records match your filter criteria.</p>
+              <button type="button" class="small-btn" (click)="setView('kiosk')">Punches can be recorded at Kiosk</button>
+            </div>
+          } @else {
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Student ID</th>
+                    <th>Student Name</th>
+                    <th>Date</th>
+                    <th>Check-In</th>
+                    <th>Check-Out</th>
+                    <th>Working Hours</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of filteredAttendance; track row.id) {
+                    <tr>
+                      <td><strong>{{ row.studentId }}</strong></td>
+                      <td>
+                        <div class="student-cell">
+                          <span class="avatar">{{ (getStudentName(row.studentId) || 'ST').slice(0, 2).toUpperCase() }}</span>
+                          <div>
+                            <strong>{{ getStudentName(row.studentId) }}</strong>
+                            <small>{{ getStudentDetails(row.studentId) }}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{{ row.date }}</td>
+                      <td><span class="time-pill">{{ row.checkIn || '—' }}</span></td>
+                      <td><span class="time-pill">{{ row.checkOut || '—' }}</span></td>
+                      <td>{{ attendanceService.formatWorkingHours(row.workingMinutes) }}</td>
+                      <td>
+                        <span class="badge" [ngClass]="statusBadgeClass(row.status)">
+                          {{ row.status }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      }
+
+      <!-- ================= 7. DEVICE & SERVER SYNC ================= -->
+      @else if (activeView === 'sync') {
+        <section class="content-grid">
+          <div class="panel sync-panel">
+            <div class="panel-head">
+              <div>
+                <h2>MARFO Device ↔ Server Sync</h2>
+                <p>Biometric device event queue and remote database synchronization</p>
+              </div>
+              <span class="badge" [class.badge-success]="isDeviceConnected" [class.badge-danger]="!isDeviceConnected">
+                {{ isDeviceConnected ? 'Bridge Active' : 'Bridge Offline' }}
+              </span>
+            </div>
+
+            <div class="sync-hero-card">
+              <div class="sync-icon-orb">🔄</div>
+              <div>
+                <h3>Biometric Event Pipeline</h3>
+                <p>
+                  Offline-first architecture: attendance timestamps are written instantly to LocalStorage and queued for server dispatch.
+                </p>
+              </div>
+            </div>
+
+            <div class="sync-metrics">
+              <div class="metric-card">
+                <span>Last Synchronized</span>
+                <strong>{{ lastSyncTime }}</strong>
+              </div>
+
+              <div class="metric-card">
+                <span>Pending Local Punches</span>
+                <strong>{{ attendanceService.records.length }}</strong>
+              </div>
+
+              <div class="metric-card">
+                <span>Remote Synced Punches</span>
+                <strong>{{ syncedRecordsCount }}</strong>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="primary-btn full sync-btn"
+              [disabled]="syncState === 'syncing'"
+              (click)="triggerSync()"
+            >
+              @if (syncState === 'syncing') {
+                <span class="spinner"></span> Syncing with Server...
+              } @else {
+                🔄 Sync Now with Server
+              }
+            </button>
+          </div>
+
+          <!-- Pipeline Architecture Diagram -->
+          <div class="panel pipeline-panel">
+            <h2>Synchronization Architecture</h2>
+            <p class="panel-intro">Standard enterprise biometric synchronization flow</p>
+
+            <div class="pipeline-cards">
+              <div class="pipeline-step">
+                <span class="pipe-num">01</span>
+                <div>
+                  <strong>MARFO Fingerprint Reader</strong>
+                  <small>Optical scanner captures minutiae and validates biometric signature</small>
+                </div>
+              </div>
+
+              <div class="pipe-arrow">↓</div>
+
+              <div class="pipeline-step">
+                <span class="pipe-num">02</span>
+                <div>
+                  <strong>Local Application (Angular 19)</strong>
+                  <small>Attendance state is written immediately to browser LocalStorage</small>
+                </div>
+              </div>
+
+              <div class="pipe-arrow">↓</div>
+
+              <div class="pipeline-step">
+                <span class="pipe-num">03</span>
+                <div>
+                  <strong>Biometric Sync Service / API Bridge</strong>
+                  <small>Dispatches batches of signed attendance records with retry safety</small>
+                </div>
+              </div>
+
+              <div class="pipe-arrow">↓</div>
+
+              <div class="pipeline-step">
+                <span class="pipe-num">04</span>
+                <div>
+                  <strong>Central Attendance Database</strong>
+                  <small>Server-side deduplication, audit logs, and notification dispatch</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      }
+    </div>
+  </main>
+
+  <!-- Interactive Toast Notification Container -->
+  <app-toast></app-toast>
+</div>
