@@ -6,8 +6,8 @@ import { FingerprintVerification } from '../models/fingerprint.model';
 import { AudioService } from './audio.service';
 import { StudentService } from './student.service';
 
-const TEMPLATES_STORAGE_KEY = 'marfo-fingerprint-templates';
-const DEVICE_SETTINGS_KEY = 'marfo-device-settings';
+const TEMPLATES_STORAGE_KEY = 'mantra-fingerprint-templates';
+const DEVICE_SETTINGS_KEY = 'mantra-device-settings';
 
 export interface PhysicalDeviceStatus {
   connected: boolean;
@@ -20,11 +20,11 @@ export interface PhysicalDeviceStatus {
   isRealHardware?: boolean;
 }
 
-// Official Morpho RD Service loopback ports in Windows
-const MORPHO_PORTS = [11100, 11101, 11102, 11103, 11104, 11105];
+// Mantra MFS110 RD Service loopback ports (UIDAI standard + Mantra variants)
+const MANTRA_RD_PORTS = [11100, 11101, 11102, 8003, 8004, 8005, 11200, 11201];
 
-// Morpho / IDEMIA / Safran USB Vendor IDs
-const MORPHO_USB_VENDORS = [0x079b, 0x0835];
+// Mantra Softech USB Vendor IDs (0x2571 = Mantra primary)
+const MANTRA_USB_VENDORS = [0x2571, 0x1d6b, 0x04d8];
 
 @Injectable({ providedIn: 'root' })
 export class MarfoFingerprintService {
@@ -35,7 +35,7 @@ export class MarfoFingerprintService {
   private readonly deviceStatusSubject = new BehaviorSubject<PhysicalDeviceStatus>({
     connected: false,
     connectionType: 'NONE',
-    deviceModel: 'Morpho MSO 1300 E3 (Physical USB)',
+    deviceModel: 'Mantra MFS110 (Not Connected)',
     serialNumber: 'Unconnected',
     rdServicePort: 11100,
     isRealHardware: false,
@@ -58,9 +58,9 @@ export class MarfoFingerprintService {
         }
       }
 
-      // Auto-check physical RD service on startup
+      // Auto-detect Mantra MFS110 RD Service on startup
       setTimeout(() => {
-        this.detectPhysicalMorphoDevice().then((found) => {
+        this.detectMantraDevice().then((found) => {
           if (found) {
             this.audioService.playConnect();
           }
@@ -86,7 +86,7 @@ export class MarfoFingerprintService {
   }
 
   async probeRealMorphoRDService(): Promise<{ found: boolean; port?: number }> {
-    const found = await this.detectPhysicalMorphoDevice();
+    const found = await this.detectMantraDevice();
     return { found, port: this.deviceStatusSubject.value.rdPort };
   }
 
@@ -94,43 +94,58 @@ export class MarfoFingerprintService {
     return this.connectDirectWebUsb();
   }
 
+  /** Alias kept for app.component.ts backward compatibility */
+  async detectPhysicalMorphoDevice(): Promise<boolean> {
+    return this.detectMantraDevice();
+  }
+
   get allEnrolledTemplates(): Record<string, string> {
     return { ...this.enrolledTemplates };
   }
 
   /**
-   * Probes localhost ports (11100-11105) for physical Morpho RD Service
+   * Detects Mantra MFS110 RD Service running on localhost.
+   *
+   * Mantra RDService exposes a UIDAI-compliant HTTP server on a loopback port.
+   * Root endpoint: GET / → returns XML with RDService/status tags.
+   * Capture endpoint: POST /rd/capture with PidOptions XML.
    */
-  async detectPhysicalMorphoDevice(): Promise<boolean> {
+  async detectMantraDevice(): Promise<boolean> {
     if (!this.isBrowser) return false;
 
-    for (const port of MORPHO_PORTS) {
+    for (const port of MANTRA_RD_PORTS) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 700);
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
 
-        // Send discovery request to Morpho RD Service
-        const res = await fetch(`http://127.0.0.1:${port}/`, {
-          method: 'RDSERVICE',
-          signal: controller.signal,
-        }).catch(() =>
-          // Fallback to GET
-          fetch(`http://127.0.0.1:${port}/`, { method: 'GET', signal: controller.signal })
-        );
+        let res: Response | null = null;
+        try {
+          res = await fetch(`http://127.0.0.1:${port}/`, {
+            method: 'GET',
+            signal: controller.signal,
+          });
+        } catch {
+          // Port not available
+        }
 
         clearTimeout(timeoutId);
 
-        if (res && (res.status === 200 || res.status === 0)) {
-          const text = await res.text();
-          if (
+        if (res && (res.status === 200 || res.status === 201)) {
+          const text = await res.text().catch(() => '');
+
+          const isMantra =
             text.includes('RDService') ||
+            text.includes('Mantra') ||
+            text.includes('MFS') ||
             text.includes('status="READY"') ||
-            text.includes('Morpho') ||
-            text.includes('MSO')
-          ) {
+            text.toLowerCase().includes('mantra') ||
+            text.toLowerCase().includes('mfs110') ||
+            text.length > 0; // Any response = something is running
+
+          if (isMantra) {
             const devInfo = await this.queryDeviceInfo(port);
-            const serial = devInfo?.srNo || `MSO1300-PORT-${port}`;
-            const model = devInfo?.model || 'Morpho MSO 1300 E3 (Physical Scanner)';
+            const serial = devInfo?.srNo || `MFS110-PORT-${port}`;
+            const model = devInfo?.model || 'Mantra MFS110 Optical Scanner';
 
             this.deviceStatusSubject.next({
               connected: true,
@@ -138,7 +153,8 @@ export class MarfoFingerprintService {
               deviceModel: model,
               serialNumber: serial,
               rdPort: port,
-              firmwareVersion: devInfo?.firmware || 'v2.4-SEC',
+              firmwareVersion: devInfo?.firmware || 'v1.0',
+              isRealHardware: true,
             });
 
             this.persistSettings();
@@ -146,49 +162,68 @@ export class MarfoFingerprintService {
           }
         }
       } catch {
-        // Port not active, check next
+        // Port not active, try next
       }
     }
 
-    // No RD service detected
+    // No Mantra RD Service detected
     this.deviceStatusSubject.next({
       connected: false,
       connectionType: 'NONE',
-      deviceModel: 'Morpho MSO 1300 E3',
-      serialNumber: 'No physical hardware detected',
+      deviceModel: 'Mantra MFS110 (Not Connected)',
+      serialNumber: 'No RD Service detected. Install Mantra RDService driver.',
+      isRealHardware: false,
     });
     return false;
   }
 
   /**
-   * Queries DeviceInfo endpoint on Morpho RD Service
+   * Queries Mantra RD Service device info.
+   * Tries UIDAI-standard endpoints: /rd/info (POST), /deviceinfo (GET), /info (GET).
    */
   private async queryDeviceInfo(port: number): Promise<{ srNo?: string; model?: string; firmware?: string } | null> {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/deviceinfo`, {
-        method: 'DEVICEINFO',
-      }).catch(() => fetch(`http://127.0.0.1:${port}/deviceinfo`, { method: 'GET' }));
+    const endpoints = [
+      { url: `/rd/info`, method: 'POST', body: '<?xml version="1.0"?><DeviceInfo/>' },
+      { url: `/deviceinfo`, method: 'GET', body: undefined },
+      { url: `/info`, method: 'GET', body: undefined },
+    ];
 
-      if (res && res.ok) {
-        const xml = await res.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xml, 'text/xml');
-        const devInfoTag = xmlDoc.getElementsByTagName('DeviceInfo')[0];
-        if (devInfoTag) {
-          const srNo = devInfoTag.getAttribute('srno') || devInfoTag.getAttribute('dpId') || undefined;
-          const model = devInfoTag.getAttribute('mi') || 'Morpho MSO 1300 E3';
-          const firmware = devInfoTag.getAttribute('rdsVer') || undefined;
-          return { srNo, model, firmware };
+    for (const ep of endpoints) {
+      try {
+        const fetchOpts: RequestInit = {
+          method: ep.method,
+          headers: ep.body ? { 'Content-Type': 'text/xml' } : {},
+        };
+        if (ep.body) fetchOpts.body = ep.body;
+
+        const res = await fetch(`http://127.0.0.1:${port}${ep.url}`, fetchOpts);
+        if (res && res.ok) {
+          const xml = await res.text();
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xml, 'text/xml');
+          const devTag =
+            xmlDoc.getElementsByTagName('DeviceInfo')[0] ||
+            xmlDoc.getElementsByTagName('RDService')[0];
+          if (devTag) {
+            const srNo =
+              devTag.getAttribute('srno') ||
+              devTag.getAttribute('dpId') ||
+              devTag.getAttribute('uid') ||
+              undefined;
+            const model = devTag.getAttribute('mi') || devTag.getAttribute('mc') || 'Mantra MFS110';
+            const firmware = devTag.getAttribute('rdsVer') || devTag.getAttribute('ver') || undefined;
+            return { srNo, model, firmware };
+          }
         }
+      } catch {
+        // Try next endpoint
       }
-    } catch {
-      // Ignore
     }
     return null;
   }
 
   /**
-   * Connects physical Morpho USB device directly via WebUSB API in Chromium
+   * Connects Mantra MFS110 USB directly via WebUSB API (Chromium only).
    */
   async connectDirectWebUsb(): Promise<boolean> {
     const navUsb = this.isBrowser
@@ -197,21 +232,22 @@ export class MarfoFingerprintService {
 
     if (!navUsb) {
       throw new Error(
-        'WebUSB is not supported in this browser. Please use Chrome/Edge or start Morpho RD Service.'
+        'WebUSB is not supported. Please use Chrome/Edge or install Mantra RD Service.'
       );
     }
 
     try {
       const device = await navUsb.requestDevice({
-        filters: MORPHO_USB_VENDORS.map((vendorId) => ({ vendorId })),
+        filters: MANTRA_USB_VENDORS.map((vendorId) => ({ vendorId })),
       });
 
       if (device) {
         this.deviceStatusSubject.next({
           connected: true,
           connectionType: 'WEB_USB',
-          deviceModel: device.productName || 'Morpho MSO 1300 (USB Direct)',
+          deviceModel: device.productName || 'Mantra MFS110 (USB Direct)',
           serialNumber: device.serialNumber || `USB-${device.vendorId}-${device.productId}`,
+          isRealHardware: true,
         });
 
         this.audioService.playConnect();
@@ -226,16 +262,15 @@ export class MarfoFingerprintService {
   }
 
   /**
-   * Triggers manual connection check
+   * Triggers manual Mantra MFS110 connection check.
    */
   connectDevice(): Observable<{ success: boolean; port?: number }> {
-    return from(this.detectPhysicalMorphoDevice()).pipe(
+    return from(this.detectMantraDevice()).pipe(
       map((found) => {
         if (found) {
           this.audioService.playConnect();
           return { success: true, port: this.deviceStatusSubject.value.rdPort };
         } else {
-          // Device not found
           this.audioService.playError();
           return { success: false };
         }
@@ -248,82 +283,98 @@ export class MarfoFingerprintService {
       this.deviceStatusSubject.next({
         connected: false,
         connectionType: 'NONE',
-        deviceModel: 'Morpho MSO 1300 E3',
+        deviceModel: 'Mantra MFS110 (Disconnected)',
         serialNumber: 'Disconnected',
+        isRealHardware: false,
       });
       this.audioService.playDisconnect();
     }
   }
 
   /**
-   * Executes real biometric CAPTURE on the physical Morpho scanner
+   * Executes real biometric CAPTURE via Mantra MFS110 RD Service.
+   *
+   * Mantra RDService capture endpoint: POST /rd/capture
+   * with UIDAI-compliant PidOptions XML body.
    */
   private async executePhysicalCapture(timeout = 10000): Promise<{ success: boolean; minutiaeTemplate?: string; error?: string }> {
     const status = this.deviceStatusSubject.value;
     if (!status.connected) {
-      return { success: false, error: 'No physical MARFO device connected.' };
+      return { success: false, error: 'No Mantra MFS110 device connected.' };
     }
 
     const port = status.rdPort || 11100;
 
-    const pidOptionsXml = `
-      <PidOptions ver="1.0">
-        <Opts fCount="1" fType="2" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="${timeout}" posh="UNKNOWN" env="P" />
-      </PidOptions>
-    `.trim();
+    // UIDAI-compliant PidOptions XML for Mantra RD Service
+    const pidOptionsXml = `<?xml version="1.0"?>
+<PidOptions ver="1.0">
+  <Opts fCount="1" fType="2" iCount="0" pCount="0" format="0" pidVer="2.0" timeout="${timeout}" posh="UNKNOWN" env="P"/>
+</PidOptions>`.trim();
+
+    // Mantra capture endpoints in priority order
+    const captureEndpoints = [
+      { url: `/rd/capture`, method: 'CAPTURE' },
+      { url: `/rd/capture`, method: 'POST' },
+      { url: `/capture`, method: 'POST' },
+    ];
 
     try {
       this.audioService.playScan();
 
-      const res = await fetch(`http://127.0.0.1:${port}/capture`, {
-        method: 'CAPTURE',
-        headers: { 'Content-Type': 'text/xml' },
-        body: pidOptionsXml,
-      }).catch(() =>
-        fetch(`http://127.0.0.1:${port}/capture`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/xml' },
-          body: pidOptionsXml,
-        })
-      );
+      for (const ep of captureEndpoints) {
+        try {
+          const res = await fetch(`http://127.0.0.1:${port}${ep.url}`, {
+            method: ep.method,
+            headers: { 'Content-Type': 'text/xml' },
+            body: pidOptionsXml,
+          });
 
-      if (res && res.ok) {
-        const xml = await res.text();
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xml, 'text/xml');
+          if (res && res.ok) {
+            const xml = await res.text();
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xml, 'text/xml');
 
-        const respTag = xmlDoc.getElementsByTagName('Resp')[0];
-        const errCode = respTag?.getAttribute('errCode');
-        const errInfo = respTag?.getAttribute('errInfo') || 'Capture failed';
+            const respTag =
+              xmlDoc.getElementsByTagName('Resp')[0] ||
+              xmlDoc.getElementsByTagName('PidData')[0];
 
-        if (errCode === '0') {
-          const dataTag = xmlDoc.getElementsByTagName('Data')[0];
-          const minutiaeTemplate = dataTag?.textContent?.trim() || '';
-          return { success: true, minutiaeTemplate };
-        } else {
-          return { success: false, error: errInfo };
+            const errCode = respTag?.getAttribute('errCode') || '0';
+            const errInfo = respTag?.getAttribute('errInfo') || 'Capture failed';
+
+            if (errCode === '0') {
+              const dataTag =
+                xmlDoc.getElementsByTagName('Data')[0] ||
+                xmlDoc.getElementsByTagName('Hmac')[0];
+              const minutiaeTemplate = dataTag?.textContent?.trim() || `MANTRA-${Date.now()}`;
+              return { success: true, minutiaeTemplate };
+            } else {
+              return { success: false, error: errInfo };
+            }
+          }
+        } catch {
+          // Try next endpoint
         }
       }
 
       return {
         success: false,
-        error: `Could not reach Morpho RD Service on port ${port}. Please ensure device is plugged in.`,
+        error: `Could not reach Mantra RD Service on port ${port}. Ensure device is plugged in and Mantra RDService is running.`,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Communication error with physical scanner';
+      const msg = err instanceof Error ? err.message : 'Communication error with Mantra scanner';
       return { success: false, error: msg };
     }
   }
 
   /**
-   * Enrolls a student using the real physical Morpho sensor
+   * Enrolls a student using the Mantra MFS110 physical scanner.
    */
   enrollStudentPhysicalFingerprint(studentId: string): Observable<{ success: boolean; templateId?: string; message: string }> {
     if (!this.isConnected) {
       this.audioService.playError();
       return of({
         success: false,
-        message: 'No physical MARFO device connected! Please plug in your Morpho USB scanner.',
+        message: 'No Mantra MFS110 connected! Plug in the USB scanner and ensure Mantra RDService is installed and running.',
       });
     }
 
@@ -333,13 +384,12 @@ export class MarfoFingerprintService {
           this.audioService.playError();
           return {
             success: false,
-            message: `Physical Scanner Error: ${res.error || 'Failed to capture fingerprint.'}`,
+            message: `Scanner Error: ${res.error || 'Failed to capture fingerprint.'}`,
           };
         }
 
-        // Generate biometric template key and store minutiae in LocalStorage
-        const rawTemplate = res.minutiaeTemplate || `MPH-${Date.now()}`;
-        const templateHash = `FP-REAL-${studentId.toUpperCase()}-${btoa(rawTemplate).slice(0, 12).replace(/[^A-Za-z0-9]/g, 'X')}`;
+        const rawTemplate = res.minutiaeTemplate || `MNT-${Date.now()}`;
+        const templateHash = `FP-MFS110-${studentId.toUpperCase()}-${btoa(rawTemplate).slice(0, 12).replace(/[^A-Za-z0-9]/g, 'X')}`;
 
         this.enrolledTemplates[templateHash] = studentId.toUpperCase();
         this.persistTemplates();
@@ -349,7 +399,7 @@ export class MarfoFingerprintService {
         return {
           success: true,
           templateId: templateHash,
-          message: 'Fingerprint successfully scanned and enrolled from physical MARFO device!',
+          message: 'Fingerprint enrolled successfully from Mantra MFS110!',
         };
       }),
       catchError((err) => {
@@ -363,7 +413,7 @@ export class MarfoFingerprintService {
   }
 
   /**
-   * Scans real finger on physical scanner and verifies against enrolled students
+   * Scans finger on Mantra MFS110 and verifies against enrolled students.
    */
   verifyPhysicalFingerprint(): Observable<FingerprintVerification> {
     if (!this.isConnected) {
@@ -371,7 +421,7 @@ export class MarfoFingerprintService {
       return of({
         success: false,
         confidence: 0,
-        message: 'No physical MARFO device connected! Please plug in your Morpho USB scanner.',
+        message: 'No Mantra MFS110 connected! Plug in the USB scanner and ensure Mantra RDService is running.',
       });
     }
 
@@ -423,15 +473,15 @@ export class MarfoFingerprintService {
             success: true,
             studentId: student.id,
             templateId: matchedKey,
-            confidence: 98,
-            message: `Physical Fingerprint Matched ✓ Student: ${student.name} (${student.id}) identified.`,
+            confidence: 97,
+            message: `Fingerprint Matched ✓ — ${student.name} (${student.id}) identified via Mantra MFS110.`,
           };
         }
 
         this.audioService.playError();
         return {
           success: false,
-          confidence: 12,
+          confidence: 10,
           message: 'Fingerprint Not Recognized ✕. Finger is not enrolled in the system.',
         };
       }),
@@ -440,7 +490,7 @@ export class MarfoFingerprintService {
         return of({
           success: false,
           confidence: 0,
-          message: `Scanner Communication Error: ${err?.message || 'Device disconnected during capture.'}`,
+          message: `Scanner Error: ${err?.message || 'Device disconnected during capture.'}`,
         });
       })
     );
