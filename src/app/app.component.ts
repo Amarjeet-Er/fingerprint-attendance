@@ -70,9 +70,15 @@ export class AppComponent implements OnInit, OnDestroy {
   // Kiosk & Verification States
   kioskStudent: Student | null = null;
   kioskScanState: FingerprintState = 'waiting';
-  kioskMessage = 'Place your finger on the physical MARFO scanner to mark attendance.';
+  kioskMessage = 'Place your finger on the biometric scanner to mark attendance.';
   kioskConfidence = 0;
   isKioskBusy = false;
+
+  // Global Biometric Device Hub
+  showDeviceModal = false;
+  isScanningDevice = false;
+  selectedDevicePreference = 'all'; // 'all' | 'Mantra' | 'Morpho' | 'usb' | 'simulated'
+  readonly probeLogs$ = this.marfoService.probeLogs$;
 
   // Enrollment Wizard State
   enrollmentStudentId = '';
@@ -82,7 +88,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   // Diagnostics / Verification View
   diagnosticState: FingerprintState = 'waiting';
-  diagnosticMessage = 'Click button to test physical optical sensor.';
+  diagnosticMessage = 'Place finger on the optical sensor and click Test Scan.';
   diagnosticBusy = false;
 
   // Attendance Filters & Settings
@@ -109,8 +115,27 @@ export class AppComponent implements OnInit, OnDestroy {
     this.initSuggestedStudentId();
   }
 
+  // Theme Management (Dark & Light Mode)
+  theme: 'dark' | 'light' = 'dark';
+
+  toggleTheme(): void {
+    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+    if (this.isBrowser) {
+      localStorage.setItem('app-theme', this.theme);
+      document.documentElement.setAttribute('data-theme', this.theme);
+      document.body.setAttribute('data-theme', this.theme);
+    }
+  }
+
   ngOnInit(): void {
     if (this.isBrowser) {
+      const storedTheme = localStorage.getItem('app-theme') as 'dark' | 'light';
+      if (storedTheme === 'dark' || storedTheme === 'light') {
+        this.theme = storedTheme;
+      }
+      document.documentElement.setAttribute('data-theme', this.theme);
+      document.body.setAttribute('data-theme', this.theme);
+
       this.updateClock();
       this.clockTimer = setInterval(() => this.updateClock(), 1000);
 
@@ -215,66 +240,87 @@ export class AppComponent implements OnInit, OnDestroy {
     this.studentForm.patchValue({ id: nextId });
   }
 
-  // MARFO Connection & Sound
+  // ─────────────── Global Biometric Device Center ─────────────────────────
+
+  openDeviceModal(): void {
+    this.showDeviceModal = true;
+  }
+
+  closeDeviceModal(): void {
+    this.showDeviceModal = false;
+  }
+
   toggleDeviceConnection(): void {
     if (this.isDeviceConnected) {
-      this.marfoService.disconnectDevice();
-      this.toastService.warning('MARFO device disconnected.');
+      this.disconnectGlobalDevice();
     } else {
-      this.marfoService.connectDevice().subscribe((res) => {
-        if (res.success) {
-          const portMsg = res.port ? ` on RD Port ${res.port}` : '';
-          this.toastService.success(
-            `Physical Morpho Hardware Connected${portMsg}! Sound chime played.`,
-            {
-              label: 'Open Kiosk',
-              run: () => this.setView('kiosk'),
-            }
-          );
-        } else {
-          this.toastService.warning(
-            'Physical Morpho scanner not found on 127.0.0.1:11100-11105. Please plug in USB and ensure Morpho RD Service is running.'
-          );
-        }
-      });
+      this.connectGlobalDevice();
     }
   }
 
-  async scanRealMorphoDevice(): Promise<void> {
-    this.toastService.info('Scanning localhost ports 11100-11105 for Morpho RD Service...');
-    const result = await this.marfoService.probeRealMorphoRDService();
-    if (result.found && result.port) {
-      this.marfoService.connectDevice().subscribe();
-      this.toastService.success(
-        `Physical Morpho Device detected on RD Port ${result.port}! Ready for real biometric scans.`,
-        {
-          label: 'Open Kiosk',
-          run: () => this.setView('kiosk'),
-        }
-      );
-    } else {
-      this.toastService.warning(
-        'Morpho RD Service not running on 127.0.0.1:11100-11105. Connected in Hardware Bridge mode. (Ensure Morpho RD Service driver is installed).',
-        {
-          label: 'Pair USB Direct',
-          run: () => this.pairUsbDevice(),
-        }
-      );
-      this.marfoService.connectDevice().subscribe();
+  connectGlobalDevice(pref?: string): void {
+    const targetPref = pref ?? (this.selectedDevicePreference === 'all' ? undefined : this.selectedDevicePreference);
+
+    if (targetPref === 'usb') {
+      this.pairUsbDevice();
+      return;
     }
+
+    if (targetPref === 'simulated') {
+      this.marfoService.connectSimulated('Mantra MFS110 (Virtual Engine)');
+      this.toastService.success('Mantra MFS110 Virtual Bridge Connected! Ready for scans.');
+      return;
+    }
+
+    this.isScanningDevice = true;
+    const label = targetPref ? `${targetPref} Scanner` : 'Mantra MFS110 / Morpho Scanner';
+    this.toastService.info(`Scanning local RD Service ports for ${label}...`);
+
+    this.marfoService.connectDevice(targetPref).subscribe((res) => {
+      this.isScanningDevice = false;
+      if (res.success) {
+        const details = this.marfoService.deviceDetails;
+        this.toastService.success(
+          `✓ ${details.deviceModel} Connected on Port ${details.rdPort || 11100}!`,
+          {
+            label: 'Open Kiosk',
+            run: () => this.setView('kiosk'),
+          }
+        );
+      } else {
+        const brand = targetPref || 'Biometric';
+        this.toastService.warning(
+          `No active ${brand} RD Service found on ports 11100-11105. Verify driver service is started in Windows services.msc.`,
+          {
+            label: 'Open Device Hub',
+            run: () => this.openDeviceModal(),
+          }
+        );
+      }
+    });
+  }
+
+  disconnectGlobalDevice(): void {
+    this.marfoService.disconnectDevice();
+    this.toastService.warning('Biometric scanner disconnected.');
   }
 
   async pairUsbDevice(): Promise<void> {
     try {
-      this.toastService.info('Opening WebUSB device selector for Morpho MSO 1300...');
+      this.toastService.info('Opening WebUSB selector for Mantra / Morpho devices...');
       const success = await this.marfoService.requestWebUsbDevice();
       if (success) {
-        this.toastService.success('Morpho USB Hardware Paired directly via WebUSB!');
+        this.toastService.success('Biometric Hardware paired directly via WebUSB!');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'USB pairing error';
       this.toastService.error(msg);
     }
+  }
+
+  // Backward compatibility alias
+  async scanRealMorphoDevice(): Promise<void> {
+    this.connectGlobalDevice('Morpho');
   }
 
   toggleSound(): void {

@@ -2,10 +2,10 @@
   <!-- Sidebar Navigation -->
   <aside class="sidebar" [class.open]="mobileMenuOpen">
     <div class="brand">
-      <div class="brand-mark">M</div>
+      <div class="brand-mark">◈</div>
       <div>
-        <strong>MARFO BIOMETRICS</strong>
-        <span>Student Attendance Suite</span>
+        <strong>BIOMETRIC SUITE</strong>
+        <span>Enterprise Attendance</span>
       </div>
     </div>
 
@@ -29,19 +29,19 @@
     </nav>
 
     <div class="sidebar-bottom">
-      <div class="device-mini-card" [class.connected]="isDeviceConnected">
+      <div class="device-mini-card" [class.connected]="isDeviceConnected" (click)="openDeviceModal()" title="Click to manage Biometric Device">
         <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
         <div class="device-info">
-          <strong>MARFO MSO 1300 E3</strong>
-          <small>{{ isDeviceConnected ? 'Connected · Ready' : 'Disconnected · Offline' }}</small>
+          <strong>{{ isDeviceConnected ? marfoService.deviceDetails.deviceModel : 'No Scanner Linked' }}</strong>
+          <small>{{ isDeviceConnected ? 'Port ' + (marfoService.deviceDetails.rdPort || 11100) + ' · Online' : 'Tap to Connect Scanner' }}</small>
         </div>
         <button
           type="button"
           class="device-toggle-btn"
           [title]="isDeviceConnected ? 'Disconnect' : 'Connect'"
-          (click)="toggleDeviceConnection()"
+          (click)="$event.stopPropagation(); toggleDeviceConnection()"
         >
-          {{ isDeviceConnected ? '✕' : '🔌' }}
+          {{ isDeviceConnected ? '✕' : '⚡' }}
         </button>
       </div>
 
@@ -88,17 +88,32 @@
           <span>{{ audioService.muted ? '🔇 Sound Off' : '🔊 Sound On' }}</span>
         </button>
 
-        <!-- Device Status Pill -->
+        <!-- Dark / Light Mode Toggle -->
+        <button
+          type="button"
+          class="theme-toggle-btn"
+          (click)="toggleTheme()"
+          [title]="theme === 'dark' ? 'Switch to Clean Light Mode' : 'Switch to Ultra-Dark Mode'"
+        >
+          <span class="theme-icon">{{ theme === 'dark' ? '🌙' : '☀️' }}</span>
+          <span class="theme-text">{{ theme === 'dark' ? 'Dark' : 'Light' }}</span>
+        </button>
+
+        <!-- UNIFIED GLOBAL BIOMETRIC DEVICE PILL -->
         <div
           class="device-pill"
           [class.pill-connected]="isDeviceConnected"
           [class.pill-disconnected]="!isDeviceConnected"
-          (click)="toggleDeviceConnection()"
-          [title]="isDeviceConnected ? 'Click to Disconnect MARFO' : 'Click to Connect MARFO Device (Plays Sound)'"
+          (click)="openDeviceModal()"
+          title="Global Biometric Hardware Hub · Click to Configure"
         >
           <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
-          <span>{{ isDeviceConnected ? 'MARFO Connected' : 'No MARFO Connected' }}</span>
-          <b class="pill-action">{{ isDeviceConnected ? 'Disconnect' : 'Connect' }}</b>
+          <span class="pill-device-name">
+            {{ isDeviceConnected ? marfoService.deviceDetails.deviceModel : 'No Scanner Connected' }}
+          </span>
+          <b class="pill-action" (click)="$event.stopPropagation(); toggleDeviceConnection()">
+            {{ isDeviceConnected ? 'Disconnect' : 'Connect' }}
+          </b>
         </div>
       </div>
     </header>
@@ -110,11 +125,11 @@
         <div>
           <p class="eyebrow">
             <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
-            Biometric Attendance System · 100% LocalStorage Persistence
+            Biometric Attendance System · Mantra MFS110 & Morpho UIDAI Certified
           </p>
           <h1>{{ activeMenuTitle }}</h1>
           <p class="subheading">
-            Zero dummy data default. User-entered student records, live fingerprint check-in/out, and real-time biometric audio feedback.
+            Enterprise biometric attendance management with seamless Mantra MFS110, Morpho MSO 1300, and UIDAI RD Service hardware integration.
           </p>
         </div>
 
@@ -129,18 +144,11 @@
           </button>
           <button
             type="button"
-            class="real-device-scan-btn"
-            (click)="scanRealMorphoDevice()"
-            title="Scan localhost ports 11100-11105 for physical Morpho RD Service"
-          >
-            🔍 Scan Real Morpho RD
-          </button>
-          <button
-            type="button"
             class="outline-action-btn"
-            (click)="toggleDeviceConnection()"
+            (click)="openDeviceModal()"
+            title="Global Scanner Configuration & Diagnostics"
           >
-            {{ isDeviceConnected ? 'Disconnect MARFO' : '🔌 Connect MARFO' }}
+            ⚡ Device Hub
           </button>
         </div>
       </div>
@@ -446,17 +454,17 @@
               </div>
 
               <!-- Physical Hardware Status Indicator -->
-              <div class="physical-device-status-badge" [class.connected]="isDeviceConnected">
+              <div class="physical-device-status-badge" [class.connected]="isDeviceConnected" (click)="openDeviceModal()" title="Manage Biometric Hardware">
                 <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
                 @if (isDeviceConnected) {
                   <div>
-                    <strong>REAL MARFO DEVICE ACTIVE</strong>
-                    <small>{{ marfoService.deviceDetails.deviceModel }} (Port: {{ marfoService.deviceDetails.rdPort || 11100 }})</small>
+                    <strong>{{ marfoService.deviceDetails.deviceModel | uppercase }} ONLINE</strong>
+                    <small>Port {{ marfoService.deviceDetails.rdPort || 11100 }} · {{ marfoService.deviceDetails.isRealHardware ? 'Hardware Sensor Ready' : 'Bridge Emulation Mode' }}</small>
                   </div>
                 } @else {
                   <div>
-                    <strong>NO PHYSICAL MARFO SCANNER DETECTED</strong>
-                    <small>Plug in USB scanner and ensure Morpho RD Service is running</small>
+                    <strong>NO SCANNER DETECTED</strong>
+                    <small>Plug in Mantra MFS110 or Morpho & click to connect</small>
                   </div>
                 }
               </div>
@@ -465,15 +473,15 @@
               <button
                 type="button"
                 class="big-kiosk-scan-btn"
-                [disabled]="isKioskBusy || !isDeviceConnected || enrolledStudents.length === 0"
-                (click)="scanKioskFingerprint()"
+                [disabled]="isKioskBusy || enrolledStudents.length === 0"
+                (click)="isDeviceConnected ? scanKioskFingerprint() : openDeviceModal()"
               >
                 @if (isKioskBusy) {
                   <span class="spinner"></span> Optical Sensor Active... Place Finger on Glass...
                 } @else if (!isDeviceConnected) {
-                  🔌 Connect / Detect Physical USB Device
+                  ⚡ Connect Scanner (Mantra / Morpho)
                 } @else {
-                  🖐️ Scan Finger on Physical MARFO Device
+                  🖐️ Scan Fingerprint for Attendance
                 }
               </button>
 
@@ -804,22 +812,40 @@
                 </select>
               }
             </div>
+          </div>
 
-            <!-- Visual Scanner Animation -->
-            <div class="enroll-visual-box" [class.active]="isEnrolling">
-              <div class="fingerprint-large">⌁</div>
-              @if (isEnrolling) {
-                <div class="scanning-ring"></div>
-              }
+          <div class="panel enroll-stage">
+            <div class="panel-head">
+              <div>
+                <h2>Fingerprint Capture Stage</h2>
+                <p>Pair a physical biometric fingerprint scan with a student</p>
+              </div>
+              <span class="badge" [class.badge-success]="isDeviceConnected" [class.badge-danger]="!isDeviceConnected">
+                {{ isDeviceConnected ? (marfoService.deviceDetails.deviceModel + ' Ready') : 'Scanner Offline' }}
+              </span>
+            </div>
+
+            <!-- Enrollment Step Visualizer -->
+            <div class="enroll-visual-wrap">
+              <div
+                class="enroll-sensor"
+                [class.active]="isDeviceConnected"
+                [class.scanning]="isEnrolling"
+                [class.enrolled]="enrollmentStep === 4"
+              >
+                <div class="sensor-glow"></div>
+                <div class="fingerprint-glyph">⌁</div>
+                <div class="sensor-scan-bar" *ngIf="isEnrolling"></div>
+              </div>
               <strong>{{ enrollmentStatusText }}</strong>
-              <small>Place index finger squarely on the MARFO sensor surface</small>
+              <small>Place index finger squarely on the optical scanner glass</small>
             </div>
 
             <!-- Enrollment Action Button -->
             <div class="enroll-actions">
               @if (!isDeviceConnected) {
-                <button type="button" class="primary-btn full" (click)="toggleDeviceConnection()">
-                  🔌 Connect MARFO Device First
+                <button type="button" class="primary-btn full" (click)="openDeviceModal()">
+                  ⚡ Connect Biometric Scanner First
                 </button>
               } @else {
                 <button
@@ -829,7 +855,7 @@
                   (click)="startEnrollmentWizard()"
                 >
                   @if (isEnrolling) {
-                    <span class="spinner"></span> Enrolling Biometrics...
+                    <span class="spinner"></span> Capturing Biometric Minutiae...
                   } @else {
                     Start Fingerprint Enrollment <span>→</span>
                   }
@@ -857,7 +883,7 @@
                 <span class="step-num">02</span>
                 <div>
                   <strong>Device Handshake</strong>
-                  <small>Check MARFO MSO 1300 optical sensor calibration</small>
+                  <small>Check Mantra MFS110 / Morpho sensor calibration</small>
                 </div>
                 <span class="step-check">{{ enrollmentStep > 2 ? '✓' : '•' }}</span>
               </div>
@@ -898,7 +924,7 @@
           <div class="panel verify-panel">
             <div class="panel-head">
               <div>
-                <h2>MARFO Optical Scanner Diagnostics</h2>
+                <h2>Biometric Optical Scanner Diagnostics</h2>
                 <p>Verify sensor reading, template extraction, and match scores</p>
               </div>
               <span class="badge" [class.badge-success]="isDeviceConnected" [class.badge-danger]="!isDeviceConnected">
@@ -907,10 +933,10 @@
             </div>
 
             <!-- Physical Sensor Instructions -->
-            <div class="physical-diag-banner">
+            <div class="physical-diag-banner" (click)="openDeviceModal()" style="cursor: pointer;" title="Configure Device">
               <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
               <span>
-                {{ isDeviceConnected ? 'Physical Morpho Scanner Active on Port ' + (marfoService.deviceDetails.rdPort || 11100) : 'Scanner Offline — Plug in USB device & check RD Service' }}
+                {{ isDeviceConnected ? marfoService.deviceDetails.deviceModel + ' Active on Port ' + (marfoService.deviceDetails.rdPort || 11100) : 'Scanner Offline — Click to open Device Hub & Connect' }}
               </span>
             </div>
 
@@ -937,13 +963,13 @@
             <button
               type="button"
               class="primary-btn full"
-              [disabled]="diagnosticBusy || !isDeviceConnected"
-              (click)="runDiagnosticsTest()"
+              [disabled]="diagnosticBusy"
+              (click)="isDeviceConnected ? runDiagnosticsTest() : openDeviceModal()"
             >
               @if (diagnosticBusy) {
                 <span class="spinner"></span> Running Biometric Analysis...
               } @else if (!isDeviceConnected) {
-                🔌 Connect MARFO to Run Diagnostics
+                ⚡ Connect Scanner to Run Diagnostics
               } @else {
                 Run Verification Test <span>→</span>
               }
@@ -964,15 +990,15 @@
               </div>
               <div class="spec-row">
                 <span>Capture Area:</span>
-                <strong>14 x 22 mm</strong>
+                <strong>14 x 22 mm (FIPS 201)</strong>
               </div>
               <div class="spec-row">
-                <span>Security Standard:</span>
-                <strong>FIPS 201 & PIV compliant</strong>
+                <span>UIDAI RD Standard:</span>
+                <strong>UIDAI Level 1 / Level 0 Registered Device</strong>
               </div>
               <div class="spec-row">
                 <span>RD Service Port:</span>
-                <strong>{{ marfoService.deviceDetails.rdPort || 11100 }}</strong>
+                <strong>{{ marfoService.deviceDetails.rdPort || 11100 }} ({{ marfoService.deviceDetails.protocol || 'HTTP' }})</strong>
               </div>
               <div class="spec-row">
                 <span>LocalStorage Templates:</span>
@@ -982,7 +1008,7 @@
 
             <div class="info-note">
               <strong>Seamless Hardware Bridge</strong>
-              <p>When physical Morpho RD Service is running on localhost, Angular communicates via standard HTTP XML/JSON loopback without requiring browser plugins.</p>
+              <p>When physical Mantra MFS110 or Morpho RD Service is running on localhost, the browser communicates via standard UIDAI HTTP/HTTPS loopback without requiring special plugins.</p>
             </div>
           </div>
         </section>
@@ -1247,6 +1273,187 @@
       }
     </div>
   </main>
+
+  <!-- ================= GLOBAL BIOMETRIC DEVICE CENTER MODAL ================= -->
+  @if (showDeviceModal) {
+    <div class="modal-backdrop" (click)="closeDeviceModal()">
+      <div class="modal-card device-hub-modal" (click)="$event.stopPropagation()">
+        <div class="modal-head">
+          <div>
+            <div class="modal-eyebrow">
+              <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
+              HARDWARE CONNECTIVITY ENGINE
+            </div>
+            <h2>Global Biometric Device Hub</h2>
+            <p>Mantra MFS110 & Morpho MSO 1300 Unified RD Service Bridge</p>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeDeviceModal()" aria-label="Close modal">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Live Hardware Card -->
+          <div class="hub-status-card" [class.online]="isDeviceConnected">
+            <div class="status-indicator-col">
+              <span class="pulse-dot" [class.online]="isDeviceConnected" [class.offline]="!isDeviceConnected"></span>
+            </div>
+            <div class="status-info-col">
+              <div class="status-title-row">
+                <h3>{{ isDeviceConnected ? marfoService.deviceDetails.deviceModel : 'No Biometric Device Linked' }}</h3>
+                <span class="badge" [class.badge-success]="isDeviceConnected" [class.badge-danger]="!isDeviceConnected">
+                  {{ isDeviceConnected ? (marfoService.deviceDetails.rdStatus || 'ONLINE') : 'OFFLINE' }}
+                </span>
+              </div>
+              <p class="status-desc">{{ marfoService.deviceDetails.statusMessage || 'Click Connect to detect USB fingerprint scanner.' }}</p>
+              
+              <div class="hw-metrics-row">
+                <div class="metric-chip">
+                  <small>Serial / UID</small>
+                  <strong>{{ marfoService.deviceDetails.serialNumber || 'N/A' }}</strong>
+                </div>
+                <div class="metric-chip">
+                  <small>RD Port</small>
+                  <strong>{{ marfoService.deviceDetails.rdPort ? marfoService.deviceDetails.rdPort : '11100' }}</strong>
+                </div>
+                <div class="metric-chip">
+                  <small>Protocol</small>
+                  <strong>{{ marfoService.deviceDetails.protocol || 'HTTP/HTTPS' }}</strong>
+                </div>
+                <div class="metric-chip">
+                  <small>Hardware Type</small>
+                  <strong>{{ marfoService.deviceDetails.connectionType }}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Device Selection Tabs / Options -->
+          <div class="hub-section">
+            <label class="section-label">Target Biometric Scanner</label>
+            <div class="target-device-grid">
+              <button
+                type="button"
+                class="target-btn"
+                [class.selected]="selectedDevicePreference === 'all'"
+                (click)="selectedDevicePreference = 'all'"
+              >
+                <span class="t-icon">🔍</span>
+                <div>
+                  <strong>Universal Auto-Detect</strong>
+                  <small>Scans Mantra MFS110 & Morpho simultaneously</small>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                class="target-btn"
+                [class.selected]="selectedDevicePreference === 'Mantra'"
+                (click)="selectedDevicePreference = 'Mantra'"
+              >
+                <span class="t-icon">⚡</span>
+                <div>
+                  <strong>Mantra MFS110 / MFS100</strong>
+                  <small>UIDAI RDSERVICE probe on 11100–11105</small>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                class="target-btn"
+                [class.selected]="selectedDevicePreference === 'Morpho'"
+                (click)="selectedDevicePreference = 'Morpho'"
+              >
+                <span class="t-icon">◈</span>
+                <div>
+                  <strong>Morpho MSO 1300 E3</strong>
+                  <small>IDEMIA RD Service probe on 11100–11105</small>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                class="target-btn"
+                [class.selected]="selectedDevicePreference === 'usb'"
+                (click)="selectedDevicePreference = 'usb'"
+              >
+                <span class="t-icon">🔌</span>
+                <div>
+                  <strong>Direct WebUSB Pair</strong>
+                  <small>VID 0x2C0F (Mantra) & 0x079B (Morpho)</small>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                class="target-btn"
+                [class.selected]="selectedDevicePreference === 'simulated'"
+                (click)="selectedDevicePreference = 'simulated'"
+              >
+                <span class="t-icon">🧪</span>
+                <div>
+                  <strong>Virtual Emulation Bridge</strong>
+                  <small>Instant biometric simulation for testing</small>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="hub-action-row">
+            @if (!isDeviceConnected) {
+              <button
+                type="button"
+                class="primary-btn hub-main-btn"
+                [disabled]="isScanningDevice"
+                (click)="connectGlobalDevice()"
+              >
+                @if (isScanningDevice) {
+                  <span class="spinner"></span> Probing Ports via RDSERVICE...
+                } @else {
+                  ⚡ Detect & Connect Scanner
+                }
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="danger-btn hub-main-btn"
+                (click)="disconnectGlobalDevice()"
+              >
+                ✕ Disconnect Biometric Device
+              </button>
+            }
+          </div>
+
+          <!-- Live Diagnostic Log Console -->
+          <div class="hub-section">
+            <div class="diag-header-row">
+              <label class="section-label">Real-Time Probe & Discovery Logs</label>
+              <span class="log-indicator">Live Console</span>
+            </div>
+            <div class="terminal-box">
+              @if ((probeLogs$ | async)?.length) {
+                @for (line of (probeLogs$ | async); track $index) {
+                  <div class="terminal-line">{{ line }}</div>
+                }
+              } @else {
+                <div class="terminal-line dim">No probe activity yet. Click "Detect & Connect Scanner" to begin scan.</div>
+              }
+            </div>
+          </div>
+
+          <!-- Mantra MFS110 Troubleshooting Guide -->
+          <div class="hub-help-card">
+            <h4>🛠️ Mantra MFS110 Quick Fix & Setup Guide</h4>
+            <ol>
+              <li><strong>USB Plug:</strong> Ensure Mantra MFS110 scanner is plugged into a USB port on your PC.</li>
+              <li><strong>Windows RD Service:</strong> Press <kbd>Win + R</kbd> → type <code>services.msc</code> → locate <strong>"Mantra RD Service"</strong> or <strong>"MFS110 RD Service"</strong> and verify status is <strong>Running</strong>.</li>
+              <li><strong>Browser Test:</strong> Open <a href="http://127.0.0.1:11100/" target="_blank" rel="noopener">http://127.0.0.1:11100/</a> in your browser. If you see the RD Service XML status, the driver is working properly.</li>
+              <li><strong>Need Drivers?</strong> Download the official MFS110 driver and RD Service from the <a href="https://mantratec.com/Download" target="_blank" rel="noopener">Mantra Softech Download Portal</a>.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
 
   <!-- Interactive Toast Notification Container -->
   <app-toast></app-toast>
