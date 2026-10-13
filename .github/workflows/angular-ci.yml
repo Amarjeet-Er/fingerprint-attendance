@@ -1,4 +1,4 @@
-name: Angular CI
+name: Angular CI/CD - Hostinger
 
 on:
   push:
@@ -7,6 +7,9 @@ on:
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -24,5 +27,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Angular project
+      - name: Build Angular
         run: npm run build
+
+      - name: Detect Angular output directory
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          if [ -f dist/fingerprint-attendance/browser/index.html ]; then
+            echo "ANGULAR_OUTPUT=dist/fingerprint-attendance/browser/" >> "$GITHUB_ENV"
+          elif [ -f dist/fingerprint-attendance/index.html ]; then
+            echo "ANGULAR_OUTPUT=dist/fingerprint-attendance/" >> "$GITHUB_ENV"
+          else
+            echo "Angular output not found. Check angular.json and dist/ contents."
+            find dist -maxdepth 4 -name index.html -print
+            exit 1
+          fi
+
+      - name: Deploy to Hostinger
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          local-dir: ${{ env.ANGULAR_OUTPUT }}
+          server-dir: /public_html/
